@@ -6,7 +6,6 @@ import { Jimp, JimpMime } from 'jimp';
 import { Canvas, Image, ImageData } from 'canvas';
 import * as faceapi from 'face-api.js';
 
-
 faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData: ImageData as any }); // Cast to any for type compatibility
 
 async function loadModels() {
@@ -28,7 +27,7 @@ async function loadModels() {
 }
 
 // (../<parent>/images/person0.jpg, 'blurred') => ../<parent>/blured/person0-blured.jpg
-const getDestinationFilePath = (originalPath: string, outputDir: string) => {
+const getDestinationFilePath = (originalPath: string, outputDir: string, suffix: string) => {
     var dir = path.dirname(originalPath)
     const segments = dir.split(path.sep);
     segments[segments.length - 1] = outputDir;
@@ -39,10 +38,14 @@ const getDestinationFilePath = (originalPath: string, outputDir: string) => {
     base = base.replace(/\.$/, '');
     
     return { 
-            path: path.join(dir, `${base}-${outputDir}`), 
+            path: path.join(dir, `${base}-${suffix}`), 
             ext: ext 
     }
 }
+
+const args = minimist(process.argv.slice(2));
+console.log(process.argv.slice(2))
+console.log(`Input path: '${args.inputPath}' Output path: '${args.outputPath}'`)
 
 // central function
 // executed for each input image
@@ -86,11 +89,16 @@ const blurImage = async (filePath: string, outputDir: string) => {
                     h: height
             };
 
-            const { path, ext } = getDestinationFilePath(filePath, "blurred");
+            const { path, ext } = getDestinationFilePath(filePath, outputDir, outputDir); // outpurDir is used here as suffix in fileName
             console.log(`\t\tOutput file name: ${path}.${ext}`)
 
+            const destination = `${path}.${ext}`;
+            console.time(destination)
+
             await image.pixelate(pixelationOptions)
-            .write(`${path}.${ext}`); // ${path}.${ext}`)
+            .write(`${path}.${ext}`);
+            
+            console.timeEnd(destination)
 
         })
     }
@@ -98,15 +106,13 @@ const blurImage = async (filePath: string, outputDir: string) => {
     console.log(`\tProcessed: ${filePath}`);
 };
 
-const args = minimist(process.argv.slice(2));
-
 (async () => {
+
+    const args = minimist(process.argv.slice(2));
     const imagesDir = args.inputPath;
     const outputDir = args.outputPath;
 
     try {
-        await loadModels();
-
         //
         // Prepare directories
         //
@@ -133,6 +139,8 @@ const args = minimist(process.argv.slice(2));
                                             || path.extname(file) === '.png' )
         console.log(`${images.length} image files found in ${imagesDir}`);
         
+        await loadModels();
+
         //
         // create task for each file
         //

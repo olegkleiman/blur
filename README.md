@@ -7,3 +7,7 @@
 
 ### How to run
 Don't forget pass path to images directory (see launnch.json)
+Run from terminal:
+``` bash
+blur % npx ts-node ./src/index.ts --inputPath=images --outputPath=blurred
+```
