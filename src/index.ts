@@ -1,3 +1,4 @@
+// import * as tf from '@tensorflow/tfjs';
 import * as path from 'path';
 import * as fs from 'fs';
 import { promisify } from 'util';
@@ -8,12 +9,24 @@ import * as faceapi from 'face-api.js';
 
 faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData: ImageData as any }); // Cast to any for type compatibility
 
+// Disable debug log
+console.debug = () => {}
+
 async function loadModels() {
+
     // Path to the downloaded models directory
     // Assumes models are in /Users/oleg/dev/sources/blur/models/
-    const modelsPath = path.join(__dirname, '../models'); 
+    const modelsPath = path.join(__dirname, '../models/mobilenet/v1'); 
+    // const modelsPath = path.join(__dirname, '../models/yolo/v2');
+    // const modelsPath = path.join(__dirname, '../models/tiny_face_detector');
     try {
         console.log(`Loading models from: ${modelsPath}`);
+
+        // await faceapi.nets.tinyFaceDetector.loadFromDisk(modelsPath);
+
+        // Load YOLO face detection model
+        // await faceapi.nets.tinyYolov2.loadFromDisk(modelsPath);
+
         // Load the SSD MobileNetV1 face detection model
         await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelsPath);
         // You can load other models as needed (e.g., for face landmarks, recognition)
@@ -27,7 +40,7 @@ async function loadModels() {
 }
 
 // (../<parent>/images/person0.jpg, 'blurred') => ../<parent>/blured/person0-blured.jpg
-const getDestinationFilePath = (originalPath: string, outputDir: string, suffix: string) => {
+const getDestinationFilePath = ({originalPath, outputDir, suffix}: {originalPath: string, outputDir: string, suffix: string}) => {
     var dir = path.dirname(originalPath)
     const segments = dir.split(path.sep);
     segments[segments.length - 1] = outputDir;
@@ -75,13 +88,24 @@ const blurImage = async (filePath: string, outputDir: string) => {
     }
 
     const detections = await faceapi.detectAllFaces(nodeCanvasElement as any, 
-                                                    new faceapi.SsdMobilenetv1Options());
+                                                    new faceapi.SsdMobilenetv1Options(
+                                                        {
+                                                            minConfidence: 0.3
+                                                        }
+                                                    ));
+                                                    // new faceapi.TinyYolov2Options());
+                                                    // new faceapi.TinyFaceDetectorOptions(
+                                                    //     {
+                                                    //         scoreThreshold: 0.2
+                                                    //     }
+                                                    // ));
+
     if (detections.length > 0) {
-        console.log(`\tDetected ${detections.length} faces in ${filePath}`)
+        console.debug(`\tDetected ${detections.length} faces in ${filePath}`)
         detections.forEach( async(detection) => {
             const { x, y, width, height } = detection.box;
-            console.log(`\tx: ${x}, y: ${y}, width: ${width}, height: ${height}`)
-                const pixelationOptions = { 
+            console.debug(`\tx: ${x}, y: ${y}, width: ${width}, height: ${height}`)
+            const pixelationOptions = { 
                     size: 40,
                     x: x,
                     y: y,
@@ -89,8 +113,11 @@ const blurImage = async (filePath: string, outputDir: string) => {
                     h: height
             };
 
-            const { path, ext } = getDestinationFilePath(filePath, outputDir, outputDir); // outpurDir is used here as suffix in fileName
-            console.log(`\t\tOutput file name: ${path}.${ext}`)
+            const { path, ext } = getDestinationFilePath({
+                                        originalPath:filePath, 
+                                        outputDir:outputDir, 
+                                        suffix: outputDir}); // outpurDir is used here as suffix in fileName
+            // console.log(`\t\tOutput file name: ${path}.${ext}`)
 
             const destination = `${path}.${ext}`;
             console.time(destination)
@@ -101,9 +128,11 @@ const blurImage = async (filePath: string, outputDir: string) => {
             console.timeEnd(destination)
 
         })
-    }
+    } else 
+        console.log(`\tNo faces detected in ${filePath}`)
 
-    console.log(`\tProcessed: ${filePath}`);
+
+    // console.log(`\tProcessed: ${filePath}`);
 };
 
 (async () => {
@@ -117,13 +146,13 @@ const blurImage = async (filePath: string, outputDir: string) => {
         // Prepare directories
         //
         if( !fs.existsSync(imagesDir) ) {
-            console.log(`Input directory does not exist: ${imagesDir}`);
+            console.error(`Input directory does not exist: ${imagesDir}`);
             process.exit(1);
         }
 
-        if( !fs.existsSync(outputDir) ) {
-            console.log(`Output directory does not exist`);
-        }
+        // if( !fs.existsSync(outputDir) ) {
+        //     console.log(`Output directory does not exist`);
+        // }
 
         const mkdir = promisify(fs.mkdir);
 
